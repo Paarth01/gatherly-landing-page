@@ -2,14 +2,16 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { Mail, CheckCircle } from "lucide-react";
 
 const EmailSignup = () => {
   const [email, setEmail] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email) {
@@ -21,15 +23,27 @@ const EmailSignup = () => {
       return;
     }
 
-    // Simulate API call - in real app, connect to Mailchimp/backend
-    setTimeout(() => {
+    setIsLoading(true);
+    
+    const { error } = await supabase
+      .from('waitlist')
+      .insert([{ email }]);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
       setIsSubmitted(true);
       toast({
         title: "Welcome to the waitlist! 🎉",
         description: "We'll notify you when Gatherly launches in your area.",
       });
       setEmail("");
-    }, 500);
+    }
+    setIsLoading(false);
   };
 
   if (isSubmitted) {
@@ -78,8 +92,9 @@ const EmailSignup = () => {
           <Button 
             type="submit" 
             className="btn-accent whitespace-nowrap"
+            disabled={isLoading}
           >
-            Join Waitlist
+            {isLoading ? 'Joining...' : 'Join Waitlist'}
           </Button>
         </form>
         
