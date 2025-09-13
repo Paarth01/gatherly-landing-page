@@ -1,8 +1,21 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import heroImage from "@/assets/hero-bg.jpg";
 
 const Hero = () => {
+  const navigate = useNavigate();
+  const { user, profile } = useAuth();
+
+  const handleCTA = () => {
+    if (user && profile) {
+      navigate(profile.role === 'organizer' ? '/organizer-dashboard' : '/dashboard');
+    } else {
+      document.getElementById('signup')?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <section className="relative min-h-screen flex items-center justify-center hero-bg overflow-hidden">
       {/* Background Image */}
@@ -39,9 +52,12 @@ const Hero = () => {
         <Button 
           size="lg" 
           className="btn-hero group"
-          onClick={() => document.getElementById('signup')?.scrollIntoView({ behavior: 'smooth' })}
+          onClick={handleCTA}
         >
-          Join Waitlist
+          {user && profile 
+            ? `Go to ${profile.role === 'organizer' ? 'Organizer' : 'Your'} Dashboard`
+            : 'Join Waitlist'
+          }
           <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
         </Button>
       </div>
