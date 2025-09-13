@@ -17,6 +17,7 @@ export type Database = {
       events: {
         Row: {
           category: string | null
+          cover_image: string | null
           created_at: string
           created_by: string
           date: string
@@ -28,6 +29,7 @@ export type Database = {
         }
         Insert: {
           category?: string | null
+          cover_image?: string | null
           created_at?: string
           created_by: string
           date: string
@@ -39,6 +41,7 @@ export type Database = {
         }
         Update: {
           category?: string | null
+          cover_image?: string | null
           created_at?: string
           created_by?: string
           date?: string
@@ -65,6 +68,7 @@ export type Database = {
           name: string
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
+          verified: boolean
         }
         Insert: {
           created_at?: string
@@ -72,6 +76,7 @@ export type Database = {
           name: string
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
+          verified?: boolean
         }
         Update: {
           created_at?: string
@@ -79,8 +84,54 @@ export type Database = {
           name?: string
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
+          verified?: boolean
         }
         Relationships: []
+      }
+      reviews: {
+        Row: {
+          comment: string | null
+          created_at: string
+          event_id: string
+          id: string
+          rating: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          event_id: string
+          id?: string
+          rating: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          event_id?: string
+          id?: string
+          rating?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reviews_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rsvps: {
         Row: {

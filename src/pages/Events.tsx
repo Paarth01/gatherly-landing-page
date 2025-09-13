@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Calendar, MapPin, User, Plus } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Calendar, MapPin, Users, Heart, UserCheck, Star, Eye } from "lucide-react";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { useNavigate } from "react-router-dom";
+import EventFilters from "@/components/EventFilters";
 
 interface Event {
   id: string;
@@ -15,121 +18,240 @@ interface Event {
   location: string;
   date: string;
   created_by: string;
-  created_at: string;
+  cover_image: string | null;
   profiles: {
     name: string;
+    verified: boolean;
   };
+  reviews?: {
+    id: string;
+    rating: number;
+  }[];
 }
 
 const Events = () => {
+  const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [events, setEvents] = useState<Event[]>([]);
+  const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const { profile } = useAuth();
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All Categories");
+  const [selectedLocation, setSelectedLocation] = useState("");
 
   useEffect(() => {
     fetchEvents();
   }, []);
 
-  const fetchEvents = async () => {
-    const { data, error } = await supabase
-      .from('events')
-      .select(`
-        *,
-        profiles!events_created_by_fkey (
-          name
-        )
-      `)
-      .order('date', { ascending: true });
+  useEffect(() => {
+    filterEvents();
+  }, [events, searchTerm, selectedCategory, selectedLocation]);
 
-    if (!error && data) {
-      setEvents(data);
+  const fetchEvents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .select(`
+          *,
+          profiles!events_created_by_fkey(name, verified),
+          reviews(id, rating)
+        `)
+        .gte('date', new Date().toISOString())
+        .order('date', { ascending: true });
+
+      if (error) throw error;
+      setEvents(data || []);
+    } catch (error) {
+      console.error('Error fetching events:', error);
+      toast.error('Failed to load events');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const filterEvents = () => {
+    let filtered = events;
+
+    if (searchTerm) {
+      filtered = filtered.filter(event =>
+        event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.category.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (selectedCategory !== "All Categories") {
+      filtered = filtered.filter(event => event.category === selectedCategory);
+    }
+
+    if (selectedLocation) {
+      filtered = filtered.filter(event =>
+        event.location.toLowerCase().includes(selectedLocation.toLowerCase())
+      );
+    }
+
+    setFilteredEvents(filtered);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedCategory("All Categories");
+    setSelectedLocation("");
+  };
+
+  const getAverageRating = (event: Event) => {
+    if (!event.reviews || event.reviews.length === 0) return 0;
+    const sum = event.reviews.reduce((acc, review) => acc + review.rating, 0);
+    return sum / event.reviews.length;
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center">Loading events...</div>
+      <div className="container mx-auto px-6 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading events...</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Discover Events</h1>
-            <p className="text-muted-foreground">Find amazing events and communities near you</p>
-          </div>
-          {profile?.role === 'organizer' && (
-            <Link to="/create-event">
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Create Event
-              </Button>
-            </Link>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {events.map((event) => (
-            <Card key={event.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <CardTitle className="text-lg">{event.title}</CardTitle>
-                  {event.category && (
-                    <Badge variant="secondary">{event.category}</Badge>
-                  )}
-                </div>
-                <CardDescription className="line-clamp-2">
-                  {event.description}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  {formatDate(event.date)}
-                </div>
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <MapPin className="w-4 h-4 mr-2" />
-                  {event.location}
-                </div>
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <User className="w-4 h-4 mr-2" />
-                  Organized by {event.profiles?.name}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {events.length === 0 && (
-          <div className="text-center py-12">
-            <h2 className="text-xl font-semibold mb-2">No events yet</h2>
-            <p className="text-muted-foreground">
-              {profile?.role === 'organizer' 
-                ? "Be the first to create an event!" 
-                : "Check back soon for upcoming events."
-              }
-            </p>
-          </div>
-        )}
+    <div className="container mx-auto px-6 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-foreground mb-2">
+          Discover Events
+        </h1>
+        <p className="text-muted-foreground">
+          Find amazing events happening around you
+        </p>
       </div>
+
+      <div className="mb-8">
+        <EventFilters
+          searchValue={searchTerm}
+          selectedCategory={selectedCategory}
+          selectedLocation={selectedLocation}
+          onSearchChange={setSearchTerm}
+          onCategoryChange={setSelectedCategory}
+          onLocationChange={setSelectedLocation}
+          onClearFilters={clearFilters}
+        />
+      </div>
+
+      {filteredEvents.length === 0 ? (
+        events.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-12">
+              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No events available</h3>
+              <p className="text-muted-foreground">
+                Check back later for new events in your area!
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="text-center py-12">
+              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No events match your filters</h3>
+              <p className="text-muted-foreground mb-4">
+                Try adjusting your search criteria or clearing filters
+              </p>
+              <Button onClick={clearFilters} variant="outline">
+                Clear Filters
+              </Button>
+            </CardContent>
+          </Card>
+        )
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredEvents.map((event) => {
+            const averageRating = getAverageRating(event);
+            
+            return (
+              <Card key={event.id} className="group hover:shadow-lg transition-shadow cursor-pointer">
+                {event.cover_image && (
+                  <div className="w-full h-48 overflow-hidden rounded-t-lg">
+                    <img
+                      src={event.cover_image}
+                      alt={event.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                )}
+                
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between mb-2">
+                    <Badge variant="secondary">{event.category}</Badge>
+                    {event.profiles.verified && (
+                      <Badge variant="outline" className="text-primary border-primary">
+                        Verified
+                      </Badge>
+                    )}
+                  </div>
+                  <CardTitle className="line-clamp-2 hover:text-primary transition-colors">
+                    {event.title}
+                  </CardTitle>
+                  <CardDescription className="line-clamp-3">
+                    {event.description}
+                  </CardDescription>
+                  
+                  {averageRating > 0 && (
+                    <div className="flex items-center gap-1 mt-2">
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      <span className="text-sm font-medium">{averageRating.toFixed(1)}</span>
+                      <span className="text-sm text-muted-foreground">
+                        ({event.reviews?.length} review{event.reviews?.length !== 1 ? 's' : ''})
+                      </span>
+                    </div>
+                  )}
+                </CardHeader>
+                
+                <CardContent 
+                  className="space-y-4"
+                  onClick={() => navigate(`/events/${event.id}`)}
+                >
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      {format(new Date(event.date), 'PPP p')}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      {event.location}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Organized by {event.profiles.name}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/events/${event.id}`);
+                      }}
+                      className="flex-1 gap-2"
+                    >
+                      <Eye className="h-4 w-4" />
+                      View Details
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

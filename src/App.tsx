@@ -8,6 +8,7 @@ import Navbar from "@/components/Navbar";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Events from "./pages/Events";
+import EventDetail from "./pages/EventDetail";
 import CreateEvent from "./pages/CreateEvent";
 import AttendeeDashboard from "./pages/AttendeeDashboard";
 import OrganizerDashboard from "./pages/OrganizerDashboard";
@@ -92,6 +93,7 @@ const App = () => (
               } 
             />
             <Route path="/events" element={<Events />} />
+            <Route path="/events/:id" element={<EventDetail />} />
             <Route 
               path="/create-event" 
               element={

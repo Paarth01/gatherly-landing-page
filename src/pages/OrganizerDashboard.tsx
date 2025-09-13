@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Calendar, MapPin, Users, Plus, Edit, Trash2, Eye, Heart, UserCheck } from "lucide-react";
+import { Calendar, MapPin, Users, Plus, Edit, Trash2, Eye, Heart, UserCheck, Download, Star, Image as ImageIcon, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
@@ -18,6 +18,7 @@ interface Event {
   location: string;
   date: string;
   created_by: string;
+  cover_image: string | null;
   rsvps?: {
     id: string;
     status: string;
@@ -25,6 +26,10 @@ interface Event {
     profiles: {
       name: string;
     };
+  }[];
+  reviews?: {
+    id: string;
+    rating: number;
   }[];
 }
 
@@ -52,6 +57,10 @@ const OrganizerDashboard = () => {
             status,
             user_id,
             profiles(name)
+          ),
+          reviews(
+            id,
+            rating
           )
         `)
         .eq('created_by', user.id)
@@ -88,6 +97,40 @@ const OrganizerDashboard = () => {
     const interested = event.rsvps?.filter(rsvp => rsvp.status === 'interested').length || 0;
     const going = event.rsvps?.filter(rsvp => rsvp.status === 'going').length || 0;
     return { interested, going };
+  };
+
+  const getAverageRating = (event: Event) => {
+    if (!event.reviews || event.reviews.length === 0) return 0;
+    const sum = event.reviews.reduce((acc, review) => acc + review.rating, 0);
+    return sum / event.reviews.length;
+  };
+
+  const exportRSVPs = (event: Event) => {
+    const csvData = event.rsvps?.map(rsvp => ({
+      Name: rsvp.profiles.name,
+      Status: rsvp.status,
+      RSVP_Date: new Date().toLocaleDateString() // You might want to add actual RSVP date to your schema
+    })) || [];
+
+    if (csvData.length === 0) {
+      toast.error('No RSVPs to export');
+      return;
+    }
+
+    const headers = Object.keys(csvData[0]).join(',');
+    const csvContent = [
+      headers,
+      ...csvData.map(row => Object.values(row).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${event.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_rsvps.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('RSVPs exported successfully');
   };
 
   const RSVPDialog = ({ event }: { event: Event }) => {
@@ -190,21 +233,50 @@ const OrganizerDashboard = () => {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {events.map((event) => {
             const { interested, going } = getRSVPCounts(event);
+            const averageRating = getAverageRating(event);
             const isPastEvent = new Date(event.date) < new Date();
             
             return (
               <Card key={event.id} className="group hover:shadow-lg transition-shadow">
-                <CardHeader>
+                {event.cover_image && (
+                  <div className="w-full h-48 overflow-hidden rounded-t-lg">
+                    <img
+                      src={event.cover_image}
+                      alt={event.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                )}
+                
+                <CardHeader className="pb-2">
                   <div className="flex items-start justify-between mb-2">
                     <Badge variant="secondary">{event.category}</Badge>
-                    {isPastEvent && (
-                      <Badge variant="outline">Past Event</Badge>
-                    )}
+                    <div className="flex gap-1">
+                      {!event.cover_image && (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          <ImageIcon className="h-3 w-3 mr-1" />
+                          No Image
+                        </Badge>
+                      )}
+                      {isPastEvent && (
+                        <Badge variant="outline">Past Event</Badge>
+                      )}
+                    </div>
                   </div>
                   <CardTitle className="line-clamp-2">{event.title}</CardTitle>
-                  <CardDescription className="line-clamp-3">
+                  <CardDescription className="line-clamp-2">
                     {event.description}
                   </CardDescription>
+                  
+                  {averageRating > 0 && (
+                    <div className="flex items-center gap-1 mt-2">
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      <span className="text-sm font-medium">{averageRating.toFixed(1)}</span>
+                      <span className="text-sm text-muted-foreground">
+                        ({event.reviews?.length} review{event.reviews?.length !== 1 ? 's' : ''})
+                      </span>
+                    </div>
+                  )}
                 </CardHeader>
                 
                 <CardContent className="space-y-4">
@@ -230,40 +302,65 @@ const OrganizerDashboard = () => {
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="flex-1">
-                          <Eye className="h-4 w-4 mr-1" />
-                          View RSVPs
-                        </Button>
-                      </DialogTrigger>
-                      <RSVPDialog event={event} />
-                    </Dialog>
+                  <div className="grid gap-2">
+                    <div className="flex gap-2">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="flex-1">
+                            <Eye className="h-4 w-4 mr-1" />
+                            View RSVPs
+                          </Button>
+                        </DialogTrigger>
+                        <RSVPDialog event={event} />
+                      </Dialog>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => exportRSVPs(event)}
+                        disabled={!event.rsvps || event.rsvps.length === 0}
+                        className="flex-1"
+                      >
+                        <Download className="h-4 w-4 mr-1" />
+                        Export CSV
+                      </Button>
+                    </div>
                     
-                    {!isPastEvent && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => navigate(`/events/${event.id}/edit`)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (window.confirm('Are you sure you want to delete this event?')) {
-                              deleteEvent(event.id);
-                            }
-                          }}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/events/${event.id}`)}
+                        className="flex-1"
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        View Event
+                      </Button>
+                      
+                      {!isPastEvent && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/events/${event.id}/edit`)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (window.confirm('Are you sure you want to delete this event?')) {
+                                deleteEvent(event.id);
+                              }
+                            }}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
